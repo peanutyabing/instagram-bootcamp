@@ -18,12 +18,14 @@ import Card from "react-bootstrap/Card";
 import OverlayTrigger from "react-bootstrap/OverlayTrigger";
 import Tooltip from "react-bootstrap/Tooltip";
 import PostForm from "./PostForm.js";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "../firebase.js";
 
 // Save the Firebase message folder name as a constant to avoid bugs due to misspelling
 const DB_MESSAGES_KEY = "messages";
 const STORAGE_IMAGES_KEY = "images";
 
-export default function Feed(props) {
+export default function Feed() {
   const inputRef = React.createRef();
   // Initialised local state. When Firebase changes, local state is updated.
   const [messages, setMessages] = useState([]);
@@ -31,15 +33,29 @@ export default function Feed(props) {
   const [timestamp, setTimestamp] = useState("");
   const [fileName, setFileName] = useState("");
   const [fileInput, setFileInput] = useState(null);
+  const [user, setUser] = useState({});
+  const [authenticated, setAuthenticated] = useState(false);
+
+  useEffect(() => {
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setUser(user);
+        setAuthenticated(true);
+      } else {
+        setUser({});
+        setAuthenticated(false);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     const messagesRef = dbRef(database, DB_MESSAGES_KEY);
     onChildAdded(messagesRef, (data) => {
-      const currentUserEmail = props.email;
+      const currentUserEmail = user.email;
       const likedUsers = data.val().likedUsers;
       const likedByCurrentUser = (likedUsers || []).includes(currentUserEmail);
       console.log(likedUsers);
-      console.log(props.email);
+      console.log(user.email);
       console.log(likedByCurrentUser);
       setMessages((messages) => [
         ...messages,
@@ -57,7 +73,20 @@ export default function Feed(props) {
         },
       ]);
     });
-  }, [props]);
+  }, []);
+
+  // useEffect(() => {
+  //   const messagesToUpdate = [...messages];
+  //   for (const message of messagesToUpdate) {
+  //     message.likedByCurrentUser = (message.likedUsers || []).includes(
+  //       props.email
+  //     );
+  //     message.likeButtonColor = message.likedByCurrentUser
+  //       ? "#ff5151"
+  //       : "#ffb5b5";
+  //   }
+  //   setMessages(messagesToUpdate);
+  // }, [props.uid]);
 
   const uploadFile = () => {
     const fileRef = storageRef(storage, `${STORAGE_IMAGES_KEY}/${fileName}`);
@@ -84,8 +113,8 @@ export default function Feed(props) {
       fileDownloadURL: url,
       likes: 0,
       likedUsers: [""],
-      authorEmail: props.email,
-      authorID: props.uid,
+      authorEmail: user.email,
+      authorID: user.uid,
     });
   };
 
@@ -129,7 +158,7 @@ export default function Feed(props) {
               className="like-btn"
               variant="outline-danger"
               onClick={handleLike}
-              disabled={!props.authenticated}
+              disabled={!authenticated}
               style={{ color: item.likeButtonColor }}
             >
               ♥
@@ -189,10 +218,10 @@ export default function Feed(props) {
     if (!likedMessage.likedByCurrentUser) {
       update(likedMessageRef, {
         likes: currentLikes + 1,
-        likedUsers: [...currentLikedUsers, props.email],
+        likedUsers: [...currentLikedUsers, user.email],
       });
       likedMessage.likes += 1;
-      likedMessage.likedUsers = [...likedMessage.likedUsers, props.email];
+      likedMessage.likedUsers = [...likedMessage.likedUsers, user.email];
       likedMessage.likedByCurrentUser = true;
       likedMessage.likeButtonColor = "#ff5151";
     } else {
@@ -212,7 +241,7 @@ export default function Feed(props) {
     <div className="feed">
       <div className="container">
         {renderMessageItems()}
-        {props.authenticated && (
+        {authenticated && (
           <PostForm
             handleFileChange={handleFileChange}
             handleTextChange={handleTextChange}
